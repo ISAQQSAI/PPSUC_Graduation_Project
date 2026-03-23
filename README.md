@@ -1,5 +1,3 @@
-![Official PDF vs compiled LaTeX output](docs/template-comparison.png)
-
 # PPSUC Graduation Project LaTeX Template
 
 中国人民公安大学信息网络安全学院本科毕业论文（设计）LaTeX 模板项目。
@@ -124,8 +122,8 @@ latex-template/main.pdf
 
 其中 `latex-template/assets/official-template.pdf` 用于部分固定样张页的精确对齐。
 
-## 已知说明
+## 模板对比
 
-- 当前仓库里包含编译产物，如 `main.aux`、`main.log`、`main.xdv`、`main.fls` 等；如果后续正式发布到 GitHub，通常建议再补一个 `.gitignore`
-- 当前仓库包含中文字体文件；如果准备公开发布，请你自行确认字体授权和分发许可是否合适
-- 当前模板更强调“尽量贴近学校样张”，而不是“全部页面都完全由纯 LaTeX 从零重建”
+下图左侧为官方 PDF 模板，右侧为当前 LaTeX 编译输出。
+
+![Official PDF vs compiled LaTeX output](docs/template-comparison.png)
