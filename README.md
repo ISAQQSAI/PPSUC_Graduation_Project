@@ -199,37 +199,14 @@ Word 中建议再做一次域更新：
 
 字体默认放在 `latex-template/fonts/` 下，模板会直接从该目录加载。
 
-## Pandoc 备选模式
-
-如果你仍想走 `pandoc` 路线，可以先安装本地 `pandoc`：
-
-```bash
-bash scripts/install_pandoc.sh
-```
-
-这个安装脚本会在下载时自动关闭代理环境变量。
-
-然后执行：
-
-```bash
-python3 scripts/export_word.py --mode pandoc
-```
-
 ## 已知说明
 
 - 当前 PDF 仍是“官方固定页 + LaTeX 正文页”的混合方案，不是整份 PDF 都由 LaTeX 从零重建。
 - 当前 DOCX 已经能从 `main.tex` 同步大部分核心内容，但导出后仍建议在 Word 中做一轮人工检查。
 - 代码块、复杂自由排版内容、以及 Word 自己的目录页码，仍建议以最终导出文件为准做复核。
 
-## 公开仓库注意事项
-
-如果你准备把这个仓库公开到 GitHub，建议注意两件事：
-
-- 中文字体文件可能涉及版权，不一定适合公开分发
-- `aux`、`log`、`xdv`、`fls`、`fdb_latexmk` 等编译产物建议通过 `.gitignore` 排除
-
 ## 模板对比
 
-下图左侧为官方 PDF 模板，右侧为当前 LaTeX 编译输出。
+下图左侧为导出的 Word 版，中间为官方 PDF 模板，右侧为当前 LaTeX 编译输出。
 
 ![Official PDF vs compiled LaTeX output](docs/template-comparison.png)
