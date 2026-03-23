@@ -2,23 +2,47 @@
 
 中国人民公安大学信息网络安全学院本科毕业论文（设计）LaTeX 模板项目。
 
-这个仓库以学校官方提供的 Word / PDF 模板为参考，整理出一套可编译的 LaTeX 版本，方便后续在 GitHub 上维护、版本管理和二次修改。
+这个仓库以学校官方提供的 [信网学院本科毕业设计模板（2024）.docx](信网学院本科毕业设计模板（2024）.docx) 和 [信网学院本科毕业设计模板（2024）.pdf](信网学院本科毕业设计模板（2024）.pdf) 为参考，整理出一套可编译、可版本管理、可导出 Word 的模板工程。
 
-## 项目目标
+## 项目概览
 
-- 以 `信网学院本科毕业设计模板（2024）.docx` 和 `信网学院本科毕业设计模板（2024）.pdf` 为版式参考
-- 提供可直接编译的 LaTeX 工程
-- 尽量保留学校模板中的中文字体、封面样式和正文层级
-- 方便后续继续微调为个人论文终稿
+- 参考学校官方 Word / PDF 模板进行版式对齐
+- 提供可直接编译的 XeLaTeX 工程
+- 保留宋体、黑体、楷体、仿宋等中文字体方案
+- 支持从同一个 `main.tex` 自动导出 `PDF` 和 `DOCX`
+- `DOCX` 导出默认复用官方 Word 模板结构，版式更接近学校模板
+- 正文公式会导出为原生 Word 可编辑公式（OMML）
 
-## 目录结构
+## 当前状态
+
+目前这套仓库已经可以稳定完成两条输出链路：
+
+1. `LaTeX -> PDF`
+2. `LaTeX -> DOCX`
+
+其中：
+
+- `PDF` 模板采用“官方固定样张页 + LaTeX 可编辑正文页”的混合方案
+- `DOCX` 模板采用“官方 Word 模板 + 从 `main.tex` 自动同步内容”的方案
+
+这意味着现在的推荐工作方式已经比较明确：
+
+1. 只维护 [latex-template/main.tex](latex-template/main.tex)
+2. 用它编译出最终 PDF
+3. 用它导出可继续编辑的 Word 版本
+
+## 仓库结构
 
 ```text
 PPSUC_Graduation_Project/
+├── README.md
+├── docs/
+│   └── template-comparison.png
 ├── latex-template/
+│   ├── README.md
 │   ├── main.tex
 │   ├── main.pdf
-│   ├── README.md
+│   ├── main.docx
 │   ├── assets/
 │   │   ├── official-template.pdf
 │   │   ├── pup-title.png
@@ -29,69 +53,100 @@ PPSUC_Graduation_Project/
 │       ├── SIMHEI.TTF
 │       ├── 楷体_GB2312.TTF
 │       └── 仿宋_GB2312.TTF
+├── scripts/
+│   ├── export_word.py
+│   └── install_pandoc.sh
+├── tools/
+│   └── pandoc
 ├── 信网学院本科毕业设计模板（2024）.docx
 └── 信网学院本科毕业设计模板（2024）.pdf
 ```
 
-## 当前状态
-
-- 已完成 XeLaTeX 编译验证
-- 当前主工程文件为 `latex-template/main.tex`
-- 当前输出 PDF 为 `latex-template/main.pdf`
-- 模板实现采用了“官方样张 + LaTeX 可编辑页”混合方案：
-  - 前置固定页和尾部固定样张页，优先按官方 PDF 对齐
-  - 中间正文示例页保留为可编辑的 LaTeX 内容
-
-这意味着它已经很适合继续作为个人论文模板使用，但如果你希望“整份文档每一页都完全由 LaTeX 重建”，还可以继续往下细化。
-
 ## 快速开始
 
-进入模板目录：
+### 1. 编译 PDF
 
 ```bash
 cd latex-template
-```
-
-使用 `latexmk` 编译：
-
-```bash
 latexmk -xelatex -interaction=nonstopmode -halt-on-error main.tex
 ```
 
-如果只想用 `xelatex`：
-
-```bash
-xelatex main.tex
-xelatex main.tex
-```
-
-编译成功后会生成：
+输出文件：
 
 ```text
 latex-template/main.pdf
 ```
 
-## 环境要求
+如果你只想用 `xelatex`：
 
-建议环境：
+```bash
+cd latex-template
+xelatex main.tex
+xelatex main.tex
+```
 
-- TeX Live
-- `xelatex`
-- `latexmk`
-- 中文支持宏包，如 `ctex`
+### 2. 导出 Word
 
-本项目当前模板依赖本地字体文件：
+在仓库根目录执行：
 
-- `SIMSUN.TTC`
-- `SIMHEI.TTF`
-- `楷体_GB2312.TTF`
-- `仿宋_GB2312.TTF`
+```bash
+python3 scripts/export_word.py
+```
 
-字体文件默认放在 `latex-template/fonts/` 下，模板会直接从该目录加载。
+默认输出：
+
+```text
+latex-template/main.docx
+```
+
+如果你想自定义输出路径：
+
+```bash
+python3 scripts/export_word.py /path/to/output.docx
+```
+
+## Word 同步范围
+
+默认 `template` 模式下，Word 导出会从 [latex-template/main.tex](latex-template/main.tex) 自动同步这些内容：
+
+- 封面基础字段
+- 中文摘要、英文摘要
+- 正文章节标题
+- 正文段落
+- 原生 Word 公式（OMML）
+- 表格标题和表格内容
+- 图片与图题
+- 代码块内容
+- 结论、致谢
+- 参考文献
+- 附录标题和附录说明
+
+默认模式的特点：
+
+- 直接复用官方 `docx` 模板结构
+- 版式对齐程度高于普通 Pandoc 导出
+- 更适合作为“贴近学校模板的 Word 初稿”
+
+## 推荐工作流
+
+推荐把 [latex-template/main.tex](latex-template/main.tex) 当成唯一内容源：
+
+1. 修改 `main.tex` 顶部论文信息和正文内容
+2. 运行 `latexmk -xelatex` 生成 PDF
+3. 运行 `python3 scripts/export_word.py` 生成 DOCX
+4. 在 Word 中更新目录和页码域
+5. 做最后一轮人工检查后提交
+
+Word 中建议再做一次域更新：
+
+- 全选全文后按 `F9`
+- 或右键目录选择“更新域”
+
+这样目录标题、页码和交叉引用会更稳。
 
 ## 你最常需要修改的内容
 
-打开 [latex-template/main.tex](latex-template/main.tex)，优先修改顶部这些字段：
+打开 [latex-template/main.tex](latex-template/main.tex)，优先修改这些宏：
 
 - `\thesistitlecn`
 - `\thesissubtitlecn`
@@ -112,15 +167,66 @@ latex-template/main.pdf
 - `\enabstracttext`
 - `\enkeywordslineone`
 - `\enkeywordslinetwo`
+- `\conclusiontext`
+- `\acknowledgementtext`
+- `\referencetitle`
+- `\referenceentryone` 到 `\referenceentryten`
+- `\appendixtitle`
+- `\appendixnote`
+- `\appendixatitle`
+- `\appendixbtitle`
 
-## 参考来源
+## 环境要求
 
-官方参考文件位于仓库根目录：
+建议环境：
 
-- [信网学院本科毕业设计模板（2024）.docx](信网学院本科毕业设计模板（2024）.docx)
-- [信网学院本科毕业设计模板（2024）.pdf](信网学院本科毕业设计模板（2024）.pdf)
+- `xelatex`
+- `latexmk`
+- `ctex` 相关中文宏包
+- Python 3
 
-其中 `latex-template/assets/official-template.pdf` 用于部分固定样张页的精确对齐。
+可选环境：
+
+- `pandoc`
+  说明：仅在使用 `--mode pandoc` 备选导出时需要
+
+本项目依赖本地字体文件：
+
+- `SIMSUN.TTC`
+- `SIMHEI.TTF`
+- `楷体_GB2312.TTF`
+- `仿宋_GB2312.TTF`
+
+字体默认放在 `latex-template/fonts/` 下，模板会直接从该目录加载。
+
+## Pandoc 备选模式
+
+如果你仍想走 `pandoc` 路线，可以先安装本地 `pandoc`：
+
+```bash
+bash scripts/install_pandoc.sh
+```
+
+这个安装脚本会在下载时自动关闭代理环境变量。
+
+然后执行：
+
+```bash
+python3 scripts/export_word.py --mode pandoc
+```
+
+## 已知说明
+
+- 当前 PDF 仍是“官方固定页 + LaTeX 正文页”的混合方案，不是整份 PDF 都由 LaTeX 从零重建。
+- 当前 DOCX 已经能从 `main.tex` 同步大部分核心内容，但导出后仍建议在 Word 中做一轮人工检查。
+- 代码块、复杂自由排版内容、以及 Word 自己的目录页码，仍建议以最终导出文件为准做复核。
+
+## 公开仓库注意事项
+
+如果你准备把这个仓库公开到 GitHub，建议注意两件事：
+
+- 中文字体文件可能涉及版权，不一定适合公开分发
+- `aux`、`log`、`xdv`、`fls`、`fdb_latexmk` 等编译产物建议通过 `.gitignore` 排除
 
 ## 模板对比
 

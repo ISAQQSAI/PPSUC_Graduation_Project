@@ -1,9 +1,9 @@
 # Fdb version 3
-["xdvipdfmx"] 1774260545 "main.xdv" "main.pdf" "main" 1774260545
-  "main.xdv" 1774260545 31796 7b44187d8e2914e05f52321aa5e50f41 "xelatex"
+["xdvipdfmx"] 1774269389 "main.xdv" "main.pdf" "main" 1774269389
+  "main.xdv" 1774269388 31796 a97455b519014c7bf11e033685a240a5 "xelatex"
   (generated)
   "main.pdf"
-["xelatex"] 1774260543 "main.tex" "main.xdv" "main" 1774260545
+["xelatex"] 1774269387 "main.tex" "main.xdv" "main" 1774269389
   "/etc/texmf/web2c/texmf.cnf" 1774252214 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/zapfding/pzdr.tfm" 1136768653 1528 f853c4d1b4e0550255e02831fdc8496f ""
@@ -128,9 +128,9 @@
   "/var/lib/texmf/web2c/xetex/xelatex.fmt" 1774252236 3720646 3999944f28af8fa861d42626c7dfedef ""
   "assets/official-template.pdf" 1774260203 421501 dfa7e1a1decdbd4e8bb9f6e26f23aade ""
   "assets/sample-framework.png" 1774258553 33910 bd2f54dcbdf49aa6ed6cd5472d36f630 ""
-  "main.aux" 1774260545 676 df5bf57bf9c1f44db249dc357cbd3766 "xelatex"
-  "main.out" 1774260544 0 d41d8cd98f00b204e9800998ecf8427e "xelatex"
-  "main.tex" 1774260543 12839 1f6dbe5a610cf004da9a845fa3728fb7 ""
+  "main.aux" 1774269388 676 df5bf57bf9c1f44db249dc357cbd3766 "xelatex"
+  "main.out" 1774269388 0 d41d8cd98f00b204e9800998ecf8427e "xelatex"
+  "main.tex" 1774269042 14803 a2f0d5aa9816ee5cbeffd94a205803bf ""
   (generated)
   "main.aux"
   "main.log"
