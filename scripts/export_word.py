@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 import copy
 import re
@@ -22,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LATEX_DIR = ROOT / "latex-template"
 MAIN_TEX = LATEX_DIR / "main.tex"
 REFERENCE_DOCX = ROOT / "信网学院本科毕业设计模板（2024）.docx"
-DEFAULT_OUTPUT = LATEX_DIR / "main.docx"
+DEFAULT_OUTPUT = ROOT / "main.docx"
 LOCAL_PANDOC = ROOT / "tools" / "pandoc"
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
@@ -117,7 +119,7 @@ def load_macros_from_text(text: str) -> dict[str, str]:
 
 def clean_tex_text(value: str) -> str:
     replacements = {
-        r"\quad": " ",
+        r"\quad": "　",
         r"\par": "\n",
         r"\\": "\n",
         r"\_": "_",
@@ -130,6 +132,7 @@ def clean_tex_text(value: str) -> str:
     value = re.sub(r"\\[a-zA-Z]+\*?(?:\{[^{}]*\})?", "", value)
     value = value.replace("{", "").replace("}", "")
     value = re.sub(r"[ \t]+", " ", value)
+    value = value.replace("　 ", "　").replace(" 　", "　")
     value = re.sub(r"\n{3,}", "\n\n", value)
     return value.strip()
 
@@ -157,10 +160,28 @@ def parse_keywords(*values: str) -> list[str]:
     return items
 
 
+def is_working_pandoc(path: str) -> bool:
+    try:
+        subprocess.run(
+            [path, "--version"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return True
+
+
 def choose_pandoc() -> str | None:
-    if LOCAL_PANDOC.exists():
+    if LOCAL_PANDOC.exists() and is_working_pandoc(str(LOCAL_PANDOC)):
         return str(LOCAL_PANDOC)
-    return shutil.which("pandoc")
+
+    system_pandoc = shutil.which("pandoc")
+    if system_pandoc and is_working_pandoc(system_pandoc):
+        return system_pandoc
+
+    return None
 
 
 def build_markdown(macros: dict[str, str]) -> str:
@@ -331,6 +352,253 @@ def word_attr(name: str) -> str:
     return f"{{{WORD_NS}}}{name}"
 
 
+def get_or_create_child(parent: ET.Element, tag: str) -> ET.Element:
+    child = parent.find(tag)
+    if child is None:
+        child = ET.SubElement(parent, tag)
+    return child
+
+
+def remove_child(parent: ET.Element, tag: str) -> None:
+    child = parent.find(tag)
+    if child is not None:
+        parent.remove(child)
+
+
+def paragraph_props(paragraph: ET.Element) -> ET.Element:
+    return get_or_create_child(paragraph, word_tag("pPr"))
+
+
+def paragraph_run_props(paragraph: ET.Element) -> ET.Element:
+    return get_or_create_child(paragraph_props(paragraph), word_tag("rPr"))
+
+
+def set_word_toggle(rpr: ET.Element, name: str, enabled: bool | None) -> None:
+    if enabled is None:
+        return
+    tag = word_tag(name)
+    remove_child(rpr, tag)
+    node = ET.SubElement(rpr, tag)
+    if not enabled:
+        node.set(word_attr("val"), "0")
+
+
+def set_word_run_format(
+    rpr: ET.Element,
+    *,
+    ascii_font: str | None = None,
+    hansi_font: str | None = None,
+    east_asia_font: str | None = None,
+    cs_font: str | None = None,
+    size: int | None = None,
+    bold: bool | None = None,
+    italic: bool | None = None,
+) -> None:
+    if any(value is not None for value in (ascii_font, hansi_font, east_asia_font, cs_font)):
+        rfonts = get_or_create_child(rpr, word_tag("rFonts"))
+        if ascii_font is not None:
+            rfonts.set(word_attr("ascii"), ascii_font)
+        if hansi_font is not None:
+            rfonts.set(word_attr("hAnsi"), hansi_font)
+        if east_asia_font is not None:
+            rfonts.set(word_attr("eastAsia"), east_asia_font)
+            rfonts.set(word_attr("hint"), "eastAsia")
+        if cs_font is not None:
+            rfonts.set(word_attr("cs"), cs_font)
+
+    if size is not None:
+        get_or_create_child(rpr, word_tag("sz")).set(word_attr("val"), str(size))
+        get_or_create_child(rpr, word_tag("szCs")).set(word_attr("val"), str(size))
+
+    set_word_toggle(rpr, "b", bold)
+    set_word_toggle(rpr, "bCs", bold)
+    set_word_toggle(rpr, "i", italic)
+    set_word_toggle(rpr, "iCs", italic)
+
+
+def set_paragraph_alignment(paragraph: ET.Element, value: str) -> None:
+    get_or_create_child(paragraph_props(paragraph), word_tag("jc")).set(word_attr("val"), value)
+
+
+def set_page_break_before(paragraph: ET.Element, enabled: bool) -> None:
+    ppr = paragraph_props(paragraph)
+    tag = word_tag("pageBreakBefore")
+    remove_child(ppr, tag)
+    if enabled:
+        ET.SubElement(ppr, tag)
+
+
+def set_paragraph_spacing(
+    paragraph: ET.Element,
+    *,
+    line: int | None = None,
+    line_rule: str | None = None,
+    before: int | None = None,
+    after: int | None = None,
+) -> None:
+    spacing = get_or_create_child(paragraph_props(paragraph), word_tag("spacing"))
+    if line is not None:
+        spacing.set(word_attr("line"), str(line))
+    if line_rule is not None:
+        spacing.set(word_attr("lineRule"), line_rule)
+    if before is not None:
+        spacing.set(word_attr("before"), str(before))
+    if after is not None:
+        spacing.set(word_attr("after"), str(after))
+
+
+def set_paragraph_indent(
+    paragraph: ET.Element,
+    *,
+    left: int | None = None,
+    left_chars: int | None = None,
+    first_line: int | None = None,
+    first_line_chars: int | None = None,
+) -> None:
+    ind = get_or_create_child(paragraph_props(paragraph), word_tag("ind"))
+    if left is not None:
+        ind.set(word_attr("left"), str(left))
+    if left_chars is not None:
+        ind.set(word_attr("leftChars"), str(left_chars))
+    if first_line is not None:
+        ind.set(word_attr("firstLine"), str(first_line))
+    if first_line_chars is not None:
+        ind.set(word_attr("firstLineChars"), str(first_line_chars))
+
+
+def apply_paragraph_text_format(
+    paragraph: ET.Element,
+    *,
+    ascii_font: str,
+    hansi_font: str,
+    east_asia_font: str,
+    cs_font: str,
+    size: int,
+    bold: bool | None = None,
+    italic: bool | None = None,
+) -> None:
+    set_word_run_format(
+        paragraph_run_props(paragraph),
+        ascii_font=ascii_font,
+        hansi_font=hansi_font,
+        east_asia_font=east_asia_font,
+        cs_font=cs_font,
+        size=size,
+        bold=bold,
+        italic=italic,
+    )
+
+    for run in paragraph.iter(word_tag("r")):
+        set_word_run_format(
+            get_or_create_child(run, word_tag("rPr")),
+            ascii_font=ascii_font,
+            hansi_font=hansi_font,
+            east_asia_font=east_asia_font,
+            cs_font=cs_font,
+            size=size,
+            bold=bold,
+            italic=italic,
+        )
+
+
+def apply_body_paragraph_format(paragraph: ET.Element) -> None:
+    ppr = paragraph_props(paragraph)
+    for name in ("pStyle", "outlineLvl", "keepNext", "keepLines"):
+        remove_child(ppr, word_tag(name))
+    set_paragraph_spacing(paragraph, line=360, line_rule="auto", before=0, after=0)
+    set_paragraph_indent(paragraph, left=0, left_chars=0, first_line=460, first_line_chars=200)
+    set_paragraph_alignment(paragraph, "both")
+    apply_paragraph_text_format(
+        paragraph,
+        ascii_font="Times New Roman",
+        hansi_font="Times New Roman",
+        east_asia_font="宋体",
+        cs_font="Times New Roman",
+        size=24,
+        bold=False,
+        italic=False,
+    )
+
+
+def apply_caption_paragraph_format(paragraph: ET.Element) -> None:
+    ppr = paragraph_props(paragraph)
+    remove_child(ppr, word_tag("pStyle"))
+    remove_child(ppr, word_tag("outlineLvl"))
+    set_paragraph_spacing(paragraph, line=300, line_rule="auto", before=0, after=0)
+    set_paragraph_indent(paragraph, left=0, left_chars=0, first_line=0, first_line_chars=0)
+    set_paragraph_alignment(paragraph, "center")
+    apply_paragraph_text_format(
+        paragraph,
+        ascii_font="Times New Roman",
+        hansi_font="Times New Roman",
+        east_asia_font="宋体",
+        cs_font="Times New Roman",
+        size=21,
+        bold=False,
+        italic=False,
+    )
+
+
+def apply_formula_paragraph_format(paragraph: ET.Element) -> None:
+    ppr = paragraph_props(paragraph)
+    remove_child(ppr, word_tag("pStyle"))
+    set_paragraph_indent(paragraph, left=0, left_chars=0, first_line=0, first_line_chars=0)
+    set_paragraph_alignment(paragraph, "center")
+    apply_paragraph_text_format(
+        paragraph,
+        ascii_font="Times New Roman",
+        hansi_font="Times New Roman",
+        east_asia_font="宋体",
+        cs_font="Times New Roman",
+        size=24,
+        bold=False,
+        italic=False,
+    )
+
+
+def apply_table_format(table: ET.Element) -> None:
+    for cell in table.iter(word_tag("tc")):
+        for paragraph in cell.findall(word_tag("p")):
+            set_paragraph_spacing(paragraph, line=300, line_rule="auto", before=0, after=0)
+            set_paragraph_indent(paragraph, left=0, left_chars=0, first_line=0, first_line_chars=0)
+            set_paragraph_alignment(paragraph, "center")
+            apply_paragraph_text_format(
+                paragraph,
+                ascii_font="Times New Roman",
+                hansi_font="Times New Roman",
+                east_asia_font="宋体",
+                cs_font="Times New Roman",
+                size=21,
+                bold=False,
+                italic=False,
+            )
+
+
+def apply_code_paragraph_format(paragraph: ET.Element) -> None:
+    apply_paragraph_text_format(
+        paragraph,
+        ascii_font="Consolas",
+        hansi_font="Consolas",
+        east_asia_font="宋体",
+        cs_font="Consolas",
+        size=18,
+        bold=False,
+        italic=False,
+    )
+
+
+def apply_format_to_top_level_paragraphs(
+    body: ET.Element,
+    start: int,
+    end: int,
+    formatter,
+) -> None:
+    children = list(body)
+    for idx in range(start, min(end, len(children))):
+        if children[idx].tag == word_tag("p"):
+            formatter(children[idx])
+
+
 def numbered_title_suffix(title: str) -> str:
     match = re.match(r"^\d+(?:\.\d+)?\s*(.*)$", title)
     if match:
@@ -373,6 +641,44 @@ def paragraph_text_nodes(paragraph: ET.Element) -> list[ET.Element]:
 
     walk(paragraph)
     return nodes
+
+
+def paragraph_has_section_break(paragraph: ET.Element) -> bool:
+    if paragraph.tag != word_tag("p"):
+        return False
+    ppr = paragraph.find(word_tag("pPr"))
+    if ppr is None:
+        return False
+    return ppr.find(word_tag("sectPr")) is not None
+
+
+def split_preserved_paragraph_children(paragraph: ET.Element) -> tuple[list[ET.Element], list[ET.Element]]:
+    preserved_tags = {
+        word_tag("bookmarkStart"),
+        word_tag("bookmarkEnd"),
+        word_tag("commentRangeStart"),
+        word_tag("commentRangeEnd"),
+        word_tag("proofErr"),
+        word_tag("permStart"),
+        word_tag("permEnd"),
+    }
+    paragraph_props = paragraph.find(word_tag("pPr"))
+    children = [child for child in list(paragraph) if child is not paragraph_props]
+
+    prefix: list[ET.Element] = []
+    index = 0
+    while index < len(children) and children[index].tag in preserved_tags:
+        prefix.append(copy.deepcopy(children[index]))
+        index += 1
+
+    suffix: list[ET.Element] = []
+    end_index = len(children) - 1
+    while end_index >= index and children[end_index].tag in preserved_tags:
+        suffix.append(copy.deepcopy(children[end_index]))
+        end_index -= 1
+    suffix.reverse()
+
+    return prefix, suffix
 
 
 def paragraph_visible_text(paragraph: ET.Element) -> str:
@@ -525,12 +831,18 @@ def reset_paragraph_text(
     source_paragraph: ET.Element | None = None,
 ) -> None:
     paragraph_props = paragraph.find(word_tag("pPr"))
+    preserved_prefix, preserved_suffix = split_preserved_paragraph_children(paragraph)
     for child in list(paragraph):
         if child is paragraph_props:
             continue
         paragraph.remove(child)
 
+    for child in preserved_prefix:
+        paragraph.append(child)
+
     if not text:
+        for child in preserved_suffix:
+            paragraph.append(child)
         return
 
     run = ET.SubElement(paragraph, word_tag("r"))
@@ -543,6 +855,9 @@ def reset_paragraph_text(
         text_node.set(XML_SPACE, "preserve")
     text_node.text = text
 
+    for child in preserved_suffix:
+        paragraph.append(child)
+
 
 def make_paragraph_like(template: ET.Element, text: str) -> ET.Element:
     paragraph = copy.deepcopy(template)
@@ -552,9 +867,13 @@ def make_paragraph_like(template: ET.Element, text: str) -> ET.Element:
 
 def replace_top_level_range(body: ET.Element, start: int, end: int, new_elements: list[ET.Element]) -> None:
     children = list(body)
+    preserved_section_breaks = [
+        copy.deepcopy(child) for child in children[start:end] if paragraph_has_section_break(child)
+    ]
     for child in children[start:end]:
         body.remove(child)
-    for offset, element in enumerate(new_elements):
+    final_elements = list(new_elements) + preserved_section_breaks
+    for offset, element in enumerate(final_elements):
         body.insert(start + offset, element)
 
 
@@ -678,6 +997,11 @@ def equation_block_to_display_math(block: str) -> str:
     return f"\\[\n{block_without_tag}\n\\]"
 
 
+def extract_equation_number(block: str) -> str:
+    tag_match = re.search(r"\\tag\{([^}]*)\}", block)
+    return tag_match.group(1).strip() if tag_match else ""
+
+
 def convert_equation_block_to_omml_xml(block: str) -> str | None:
     pandoc = choose_pandoc()
     if pandoc is None:
@@ -708,7 +1032,7 @@ def convert_equation_block_to_omml_xml(block: str) -> str | None:
             )
             with zipfile.ZipFile(docx_path, "r") as archive:
                 root = ET.fromstring(archive.read("word/document.xml"))
-    except (subprocess.CalledProcessError, zipfile.BadZipFile, ET.ParseError):
+    except (OSError, subprocess.CalledProcessError, zipfile.BadZipFile, ET.ParseError):
         return None
 
     body = root.find(word_tag("body"))
@@ -783,11 +1107,46 @@ def load_figure_image_bytes(path: Path) -> bytes | None:
     return buffer.getvalue()
 
 
-def make_omml_paragraph(omml_xml: str, template: ET.Element) -> ET.Element | None:
+def make_normal_math_text_run(text: str) -> ET.Element:
+    run = ET.Element(math_tag("r"))
+    run_props = ET.SubElement(run, math_tag("rPr"))
+    ET.SubElement(run_props, math_tag("nor"))
+    text_node = ET.SubElement(run, math_tag("t"))
+    text_node.text = text
+    return run
+
+
+def normalize_equation_number_in_omml(omml_paragraph: ET.Element, equation_number: str) -> None:
+    if not equation_number:
+        return
+
+    o_math = omml_paragraph.find(f".//{math_tag('oMath')}")
+    if o_math is None:
+        return
+
+    children = list(o_math)
+    replacement = make_normal_math_text_run(f"({equation_number})")
+    for idx in range(len(children) - 1, -1, -1):
+        child = children[idx]
+        if child.tag == math_tag("d"):
+            o_math.remove(child)
+            o_math.insert(idx, replacement)
+            return
+
+    o_math.append(replacement)
+
+
+def make_omml_paragraph(
+    omml_xml: str,
+    template: ET.Element,
+    equation_number: str = "",
+) -> ET.Element | None:
     try:
         omml_paragraph = ET.fromstring(omml_xml)
     except ET.ParseError:
         return None
+
+    normalize_equation_number_in_omml(omml_paragraph, equation_number)
 
     paragraph = copy.deepcopy(template)
     paragraph_props = paragraph.find(word_tag("pPr"))
@@ -813,7 +1172,48 @@ def make_omml_paragraph(omml_xml: str, template: ET.Element) -> ET.Element | Non
             continue
         paragraph.append(copy.deepcopy(child))
 
+    apply_formula_paragraph_format(paragraph)
     return paragraph
+
+
+def build_equation_content_elements(
+    sync_data: dict[str, object],
+    intro_template: ET.Element,
+    label_template: ET.Element,
+    equation_template: ET.Element,
+    blank_template: ET.Element,
+) -> list[ET.Element]:
+    elements = [make_paragraph_like(intro_template, sync_data["formula_intro"])]
+    labels = sync_data["formula_example_labels"]
+    equations = sync_data["equations"]
+    equation_omml_xmls = sync_data["equation_omml_xmls"]
+    equation_numbers = sync_data["equation_numbers"]
+    count = max(len(labels), len(equations), len(equation_omml_xmls))
+
+    for idx in range(count):
+        label = labels[idx] if idx < len(labels) else f"示例 {idx + 1}:"
+        elements.append(make_paragraph_like(label_template, label))
+
+        omml_xml = equation_omml_xmls[idx] if idx < len(equation_omml_xmls) else None
+        equation_number = equation_numbers[idx] if idx < len(equation_numbers) else ""
+        if omml_xml:
+            paragraph = make_omml_paragraph(omml_xml, equation_template, equation_number)
+            if paragraph is not None:
+                elements.append(paragraph)
+            else:
+                for line in equations[idx] if idx < len(equations) else []:
+                    paragraph = make_paragraph_like(equation_template, line)
+                    apply_formula_paragraph_format(paragraph)
+                    elements.append(paragraph)
+        else:
+            for line in equations[idx] if idx < len(equations) else []:
+                paragraph = make_paragraph_like(equation_template, line)
+                apply_formula_paragraph_format(paragraph)
+                elements.append(paragraph)
+
+        elements.append(make_paragraph_like(blank_template, ""))
+
+    return elements
 
 
 def build_full_content_sync(tex_text: str, macros: dict[str, str]) -> dict[str, object]:
@@ -857,6 +1257,7 @@ def build_full_content_sync(tex_text: str, macros: dict[str, str]) -> dict[str, 
 
     equation_blocks = extract_environment_bodies(editable_body, "equation")
     equations = [parse_equation_lines(block) for block in equation_blocks]
+    equation_numbers = [extract_equation_number(block) for block in equation_blocks]
     equation_omml_xmls = [convert_equation_block_to_omml_xml(block) for block in equation_blocks]
     tables = [parse_tabular_rows(block) for block in extract_environment_bodies(editable_body, "tabular")]
     if len(tables) >= 3:
@@ -898,6 +1299,7 @@ def build_full_content_sync(tex_text: str, macros: dict[str, str]) -> dict[str, 
             songti_paragraphs[5] if len(songti_paragraphs) > 5 else "示例 2:",
         ],
         "equations": equations,
+        "equation_numbers": equation_numbers,
         "equation_omml_xmls": equation_omml_xmls,
         "table_heading": heiti_paragraphs[1] if len(heiti_paragraphs) > 1 else "表格使用示例",
         "table_intro": songti_paragraphs[6] if len(songti_paragraphs) > 6 else "",
@@ -954,8 +1356,8 @@ def apply_toc_sync(document_xml: str, sync_data: dict[str, object]) -> str:
         sync_data["full_body"]["section_titles"][1],
         sync_data["full_body"]["chapter_titles"][1],
         sync_data["full_body"]["section_titles"][2],
-        "4.结论",
-        "致谢",
+        "4.结　论",
+        "致　谢",
         sync_data["reference_title"],
         sync_data["appendix_title"],
     ]
@@ -1004,6 +1406,8 @@ def apply_full_body_sync(document_xml: str, sync_data: dict[str, object]) -> str
         trailing_blank_count=max(0, chapter2_idx - intro_idx - 1 - len(sync_data["intro_paragraphs"])),
         blank_template=children[intro_idx + 1],
     )
+    chapter2_idx = find_top_level_index(body, "2.【单击此处键入一级标题】", start=intro_idx)
+    apply_format_to_top_level_paragraphs(body, intro_idx + 1, chapter2_idx, apply_body_paragraph_format)
 
     children = list(body)
     chapter2_idx = find_top_level_index(body, "2.【单击此处键入一级标题】", start=intro_idx)
@@ -1029,6 +1433,8 @@ def apply_full_body_sync(document_xml: str, sync_data: dict[str, object]) -> str
         trailing_blank_count=max(0, chapter3_idx - section22_idx - 1 - len(sync_data["section_body_paragraphs"][0])),
         blank_template=children[section22_idx + 1],
     )
+    chapter3_idx = find_top_level_index(body, "3.【单击此处键入一级标题】", start=section22_idx)
+    apply_format_to_top_level_paragraphs(body, section22_idx + 1, chapter3_idx, apply_body_paragraph_format)
 
     children = list(body)
     chapter3_idx = find_top_level_index(body, "3.【单击此处键入一级标题】", start=section22_idx)
@@ -1047,6 +1453,8 @@ def apply_full_body_sync(document_xml: str, sync_data: dict[str, object]) -> str
         trailing_blank_count=max(0, formula_heading_idx - section31_body_start - len(sync_data["section_body_paragraphs"][1])),
         blank_template=children[section31_body_start],
     )
+    formula_heading_idx = find_top_level_index(body, "公式使用示例", start=section31_idx, contains=True)
+    apply_format_to_top_level_paragraphs(body, section31_body_start, formula_heading_idx, apply_body_paragraph_format)
 
     children = list(body)
     formula_heading_idx = find_top_level_index(body, "公式使用示例", contains=True)
@@ -1056,72 +1464,14 @@ def apply_full_body_sync(document_xml: str, sync_data: dict[str, object]) -> str
     conclusion_idx = find_top_level_index(body, "4.结论", start=code_heading_idx, contains=True)
 
     reset_paragraph_text(children[formula_heading_idx], sync_data["formula_heading"], source_paragraph=children[formula_heading_idx])
-    reset_paragraph_text(children[formula_heading_idx + 1], sync_data["formula_intro"], source_paragraph=children[formula_heading_idx + 1])
-    reset_paragraph_text(children[formula_heading_idx + 2], sync_data["formula_example_labels"][0], source_paragraph=children[formula_heading_idx + 2])
-
-    first_equation_template = children[formula_heading_idx + 3]
-    first_equation_omml = (
-        sync_data["equation_omml_xmls"][0]
-        if len(sync_data["equation_omml_xmls"]) > 0
-        else None
+    formula_elements = build_equation_content_elements(
+        sync_data,
+        children[formula_heading_idx + 1],
+        children[formula_heading_idx + 2],
+        children[formula_heading_idx + 3],
+        children[table_heading_idx - 1],
     )
-    if first_equation_omml:
-        first_equation_paragraph = make_omml_paragraph(first_equation_omml, first_equation_template)
-        if first_equation_paragraph is not None:
-            replace_top_level_range(body, formula_heading_idx + 3, formula_heading_idx + 5, [first_equation_paragraph])
-        else:
-            replace_paragraph_range_with_text(
-                body,
-                formula_heading_idx + 3,
-                formula_heading_idx + 5,
-                first_equation_template,
-                sync_data["equations"][0] if len(sync_data["equations"]) > 0 else [],
-            )
-    else:
-        replace_paragraph_range_with_text(
-            body,
-            formula_heading_idx + 3,
-            formula_heading_idx + 5,
-            first_equation_template,
-            sync_data["equations"][0] if len(sync_data["equations"]) > 0 else [],
-        )
-
-    children = list(body)
-    formula_heading_idx = find_top_level_index(body, "公式使用示例", contains=True)
-    table_heading_idx = find_top_level_index(body, "表格使用示例", start=formula_heading_idx, contains=True)
-    reset_paragraph_text(children[formula_heading_idx + 5], sync_data["formula_example_labels"][1], source_paragraph=children[formula_heading_idx + 5])
-    second_equation_template = children[formula_heading_idx + 6]
-    second_equation_omml = (
-        sync_data["equation_omml_xmls"][1]
-        if len(sync_data["equation_omml_xmls"]) > 1
-        else None
-    )
-    if second_equation_omml:
-        second_equation_paragraph = make_omml_paragraph(second_equation_omml, second_equation_template)
-        if second_equation_paragraph is not None:
-            trailing_blank = make_paragraph_like(children[table_heading_idx - 1], "")
-            replace_top_level_range(
-                body,
-                formula_heading_idx + 6,
-                table_heading_idx,
-                [second_equation_paragraph, trailing_blank],
-            )
-        else:
-            replace_paragraph_range_with_text(
-                body,
-                formula_heading_idx + 6,
-                table_heading_idx,
-                second_equation_template,
-                sync_data["equations"][1] if len(sync_data["equations"]) > 1 else [],
-            )
-    else:
-        replace_paragraph_range_with_text(
-            body,
-            formula_heading_idx + 6,
-            table_heading_idx,
-            second_equation_template,
-            sync_data["equations"][1] if len(sync_data["equations"]) > 1 else [],
-        )
+    replace_top_level_range(body, formula_heading_idx + 1, table_heading_idx, formula_elements)
 
     children = list(body)
     table_heading_idx = find_top_level_index(body, "表格使用示例", contains=True)
@@ -1131,12 +1481,16 @@ def apply_full_body_sync(document_xml: str, sync_data: dict[str, object]) -> str
     reset_paragraph_text(children[table_heading_idx + 2], sync_data["table_example_label"], source_paragraph=children[table_heading_idx + 2])
     if sync_data["table_captions"]:
         reset_paragraph_text(children[table_heading_idx + 4], sync_data["table_captions"][0], source_paragraph=children[table_heading_idx + 4])
+        apply_caption_paragraph_format(children[table_heading_idx + 4])
     if len(sync_data["table_captions"]) > 1:
         reset_paragraph_text(children[table_heading_idx + 7], sync_data["table_captions"][1], source_paragraph=children[table_heading_idx + 7])
+        apply_caption_paragraph_format(children[table_heading_idx + 7])
     if sync_data["tables"]:
         update_table_rows(children[table_heading_idx + 5], sync_data["tables"][0])
+        apply_table_format(children[table_heading_idx + 5])
     if len(sync_data["tables"]) > 1:
         update_table_rows(children[table_heading_idx + 8], sync_data["tables"][1])
+        apply_table_format(children[table_heading_idx + 8])
 
     children = list(body)
     figure_heading_idx = find_top_level_index(body, "图的使用示例", contains=True)
@@ -1144,6 +1498,7 @@ def apply_full_body_sync(document_xml: str, sync_data: dict[str, object]) -> str
     reset_paragraph_text(children[figure_heading_idx], sync_data["figure_heading"], source_paragraph=children[figure_heading_idx])
     reset_paragraph_text(children[figure_heading_idx + 1], sync_data["figure_intro"], source_paragraph=children[figure_heading_idx + 1])
     reset_paragraph_text(children[figure_heading_idx + 3], sync_data["figure_caption"], source_paragraph=children[figure_heading_idx + 3])
+    apply_caption_paragraph_format(children[figure_heading_idx + 3])
     replace_top_level_range(
         body,
         figure_heading_idx + 2,
@@ -1172,6 +1527,10 @@ def apply_full_body_sync(document_xml: str, sync_data: dict[str, object]) -> str
         trailing_blank_count=3,
         blank_template=blank_template,
     )
+    conclusion_idx = find_top_level_index(body, "4.结论", start=code_heading_idx, contains=True)
+    apply_format_to_top_level_paragraphs(body, code_heading_idx + 3, conclusion_idx, apply_code_paragraph_format)
+    children = list(body)
+    set_page_break_before(children[conclusion_idx], True)
 
     return ET.tostring(root, encoding="unicode")
 
@@ -1343,7 +1702,7 @@ def parse_args() -> argparse.Namespace:
         "output",
         nargs="?",
         default=str(DEFAULT_OUTPUT),
-        help="output .docx path, default: latex-template/main.docx",
+        help="output .docx path, default: ./main.docx",
     )
     parser.add_argument(
         "--mode",

@@ -10,6 +10,7 @@
 - 提供可直接编译的 XeLaTeX 工程
 - 保留宋体、黑体、楷体、仿宋等中文字体方案
 - 支持从同一个 `main.tex` 自动导出 `PDF` 和 `DOCX`
+- 最终导出的 `PDF` 和 `DOCX` 默认输出到仓库根目录
 - `DOCX` 导出默认复用官方 Word 模板结构，版式更接近学校模板
 - 正文公式会导出为原生 Word 可编辑公式（OMML）
 
@@ -36,13 +37,13 @@
 ```text
 PPSUC_Graduation_Project/
 ├── README.md
+├── main.pdf
+├── main.docx
 ├── docs/
 │   └── template-comparison.png
 ├── latex-template/
 │   ├── README.md
 │   ├── main.tex
-│   ├── main.pdf
-│   ├── main.docx
 │   ├── assets/
 │   │   ├── official-template.pdf
 │   │   ├── pup-title.png
@@ -54,6 +55,7 @@ PPSUC_Graduation_Project/
 │       ├── 楷体_GB2312.TTF
 │       └── 仿宋_GB2312.TTF
 ├── scripts/
+│   ├── export_pdf.py
 │   ├── export_word.py
 │   └── install_pandoc.sh
 ├── tools/
@@ -67,17 +69,16 @@ PPSUC_Graduation_Project/
 ### 1. 编译 PDF
 
 ```bash
-cd latex-template
-latexmk -xelatex -interaction=nonstopmode -halt-on-error main.tex
+python3 scripts/export_pdf.py
 ```
 
 输出文件：
 
 ```text
-latex-template/main.pdf
+main.pdf
 ```
 
-如果你只想用 `xelatex`：
+如果你只想在模板目录里手动编译调试：
 
 ```bash
 cd latex-template
@@ -96,7 +97,7 @@ python3 scripts/export_word.py
 默认输出：
 
 ```text
-latex-template/main.docx
+main.docx
 ```
 
 如果你想自定义输出路径：
@@ -132,7 +133,7 @@ python3 scripts/export_word.py /path/to/output.docx
 推荐把 [latex-template/main.tex](latex-template/main.tex) 当成唯一内容源：
 
 1. 修改 `main.tex` 顶部论文信息和正文内容
-2. 运行 `latexmk -xelatex` 生成 PDF
+2. 运行 `python3 scripts/export_pdf.py` 生成 PDF
 3. 运行 `python3 scripts/export_word.py` 生成 DOCX
 4. 在 Word 中更新目录和页码域
 5. 做最后一轮人工检查后提交

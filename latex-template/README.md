@@ -9,24 +9,26 @@
 
 - `PDF` 使用“官方固定样张页 + LaTeX 可编辑正文页”的混合方案
 - `DOCX` 使用“官方 Word 模板 + 从 main.tex 自动同步内容”的方案
+- 最终导出的 `PDF` 和 `DOCX` 默认输出到仓库根目录
 
 ## 文件说明
 
 - `main.tex`：主模板，日常只需要编辑这个文件
-- `main.pdf`：当前编译输出 PDF
-- `main.docx`：当前导出 Word 文件
+- `../main.pdf`：默认导出的最终 PDF
+- `../main.docx`：默认导出的最终 Word 文件
 - `assets/`：模板图片、样张 PDF 等资源
 - `fonts/`：模板依赖的中文字体文件
 
 ## 编译 PDF
 
-建议在当前目录执行：
+建议回到仓库根目录执行：
 
 ```bash
-latexmk -xelatex -interaction=nonstopmode -halt-on-error main.tex
+cd ..
+python3 scripts/export_pdf.py
 ```
 
-或者：
+如果你只想在当前目录手动编译调试：
 
 ```bash
 xelatex main.tex
@@ -45,7 +47,7 @@ python3 scripts/export_word.py
 默认输出：
 
 ```text
-latex-template/main.docx
+main.docx
 ```
 
 默认模式会直接复用官方 `docx` 模板并替换占位内容，所以版式会更贴近学校模板。
